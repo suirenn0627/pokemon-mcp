@@ -15,6 +15,21 @@ from .type_chart import TYPES, effectiveness
 mcp = FastMCP("pokemon")
 
 
+def _validate_spread(level: int, *, ivs: list[int], evs: list[int]) -> str | None:
+    """レベル・個体値・努力値の範囲を検証。問題があればエラー文を返す。"""
+    if not 1 <= level <= 100:
+        return f"level は 1〜100 で指定してください(受領: {level})。"
+    for iv in ivs:
+        if not 0 <= iv <= 31:
+            return f"個体値は 0〜31 です(受領: {iv})。"
+    for ev in evs:
+        if not 0 <= ev <= 252:
+            return f"努力値は各 0〜252 です(受領: {ev})。"
+    if sum(evs) > 510:
+        return f"努力値の合計が 510 を超えています(受領: {sum(evs)})。"
+    return None
+
+
 @mcp.tool()
 def get_pokemon(name: str) -> dict:
     """ポケモンの種族値・タイプ・特性を返す(例: garchomp, meowscarada)。"""
@@ -71,6 +86,9 @@ def calc_stat(
     nature: str = "hardy", stat: str = "atk",
 ) -> dict:
     """実数値を計算。stat は hp/atk/def/spa/spd/spe。nature は英名/日本語名どちらも可。"""
+    err = _validate_spread(level, ivs=[iv], evs=[ev])
+    if err:
+        return {"error": err}
     is_hp = stat == "hp"
     mult = 1.0 if is_hp else nature_multiplier(nature, stat)
     value = _calc_stat(base, iv, ev, level, mult, is_hp=is_hp)
@@ -105,12 +123,20 @@ def calc_damage(
       wise-glasses / charcoal 等のタイプ強化アイテム)。
     - weather: sun/rain/sand/snow(晴れ/雨/砂/雪。日本語可)。晴れ雨は炎水技、砂雪は岩氷の防御に影響。
     - 攻守のポケモン名・技名は英語slug/日本語名どちらも可(日本語は要 build_db --aliases)。
-    - 命中(光の粉等)は別軸。本ツールは全段命中した前提のダメージ・KO%を返す(命中率は calc_accuracy)。
+    - tera_type は攻撃側のSTABのみに反映(防御側の相性計算には影響しない)。
+    - 命中(光の粉等)は別軸。本ツールは命中前提のダメージ・KO%を返す(命中率は calc_accuracy)。
+      可変多段(2-5発)の ko_chance はヒット数分布で重み付け、ko_chance_all_hits は最大ヒット前提。
     """
     if protean and tera_type:
         return {"error": "protean と tera_type は同時に指定できません(どちらか一方)。"}
     if tera_type and tera_type.lower() not in TYPES:
         return {"error": f"不明なテラスタイプ: {tera_type}"}
+    err = (
+        _validate_spread(level, ivs=[attacker_iv], evs=[attacker_offense_ev])
+        or _validate_spread(level, ivs=[defender_iv], evs=[defender_hp_ev, defender_defense_ev])
+    )
+    if err:
+        return {"error": err}
 
     try:
         mv = data.get_move(move)
@@ -125,7 +151,7 @@ def calc_damage(
     physical = damage_class == "physical"
     category = "physical" if physical else "special"
     move_type = mv["type"]
-    item_slug = item.strip().lower().replace(" ", "-") if item else None
+    item_slug = data.slugify(item) if item else None
     type_eff = effectiveness(move_type, def_p["types"])
 
     off_key, def_key = ("atk", "def") if physical else ("spa", "spd")

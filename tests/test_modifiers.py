@@ -45,7 +45,6 @@ def test_weather_changes_damage():
 
 def test_jp_alias_resolution(tmp_path, monkeypatch):
     monkeypatch.setattr(data, "DB_PATH", tmp_path / "t.db")
-    monkeypatch.setattr(data, "_schema_ready", False)
     # 英字はそのまま slug 化
     assert data.resolve_name("pokemon", "garchomp") == "garchomp"
     # 日本語はエイリアス表で解決

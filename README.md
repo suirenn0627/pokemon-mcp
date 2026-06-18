@@ -54,10 +54,29 @@ uv run python scripts/build_db.py
 ## Claude Code への登録
 
 ```bash
-claude mcp add pokemon -- uv --directory /Users/sui/Programing/nymphaea.dev/pokemon-mcp run pokemon-mcp
+# /path/to/pokemon-mcp は clone した実際のパスに置き換える
+claude mcp add --scope user pokemon -- uv --directory /path/to/pokemon-mcp run pokemon-mcp
 ```
 
 ## 仕様の正確さ
 
 `tests/test_damage.py` が「陽気マスカーニャ(変幻自在)トリプルアクセル vs 無振りガブリアス Lv50」の
 手計算(各撃 64-84 / 132-156 / 196-232、2撃目で確定気絶)を再現することでエンジンを検証している。
+
+## ライセンス
+
+本プロジェクトの**ソースコード**は [MIT License](LICENSE) で公開している。
+
+## 免責 (Disclaimer)
+
+これは**非公式・非営利のファンプロジェクト**です。
+
+- Pokémon およびポケモンのキャラクター名・技名は、任天堂 / 株式会社クリーチャーズ /
+  株式会社ゲームフリーク(The Pokémon Company)の商標です。
+- 本プロジェクトは任天堂・The Pokémon Company とは**一切関係なく、公認・後援も受けていません**。
+- ゲームの画像・音声・アートワーク等の**著作物は一切含みません**。種族値・技・タイプ相性などの
+  事実データは [PokéAPI](https://pokeapi.co/) から**実行時に取得**するのみで、本リポジトリには
+  同梱・再配布していません(`data/pokedex.db` は `.gitignore` 済み)。
+- MIT ライセンスは本プロジェクトのコードにのみ適用され、ポケモンのデータ・名称・商標には
+  及びません。
+- 非営利・個人利用を前提としています。商用利用は権利者の許諾が必要です。

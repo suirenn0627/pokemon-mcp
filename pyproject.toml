@@ -15,7 +15,15 @@ pokemon-mcp = "pokemon_mcp.server:main"
 [dependency-groups]
 dev = [
     "pytest>=8",
+    "ruff>=0.6",
 ]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
 
 [build-system]
 requires = ["hatchling"]

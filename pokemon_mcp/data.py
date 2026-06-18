@@ -28,30 +28,29 @@ _STAT_MAP = {
     "speed": "spe",
 }
 
-_schema_ready = False
-
-
 class NotFound(Exception):
     """PokeAPIに該当する名前が存在しない(ユーザー入力起因)。"""
 
 
 def _conn() -> sqlite3.Connection:
-    global _schema_ready
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
-    if not _schema_ready:
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS cache (kind TEXT, name TEXT, json TEXT, PRIMARY KEY (kind, name))"
-        )
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS alias (kind TEXT, alias TEXT, slug TEXT, PRIMARY KEY (kind, alias))"
-        )
-        _schema_ready = True
+    # CREATE IF NOT EXISTS は冪等。並行アクセスでも安全なので毎回実行する。
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS cache (kind TEXT, name TEXT, json TEXT, PRIMARY KEY (kind, name))"
+    )
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS alias (kind TEXT, alias TEXT, slug TEXT, PRIMARY KEY (kind, alias))"
+    )
     return conn
 
 
-def _slug(name: str) -> str:
+def slugify(name: str) -> str:
+    """入力名をPokeAPIのslug形式に正規化(名前正規化のSSoT)。"""
     return name.strip().lower().replace(" ", "-").replace("_", "-").replace("'", "")
+
+
+_slug = slugify  # 後方互換
 
 
 def _cache_get(kind: str, name: str) -> dict | None:

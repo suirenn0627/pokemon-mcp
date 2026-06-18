@@ -20,6 +20,9 @@ ESCALATING_MULTIHIT = {
     "triple-kick": [1, 2, 3],   # 10 / 20 / 30
 }
 
+# 可変多段(2〜5発)のヒット数分布(第5世代以降)
+VARIABLE_HIT_DIST = {2: 0.35, 3: 0.35, 4: 0.15, 5: 0.15}
+
 
 def poke_round(x: float) -> int:
     """半分を切り捨てる丸め(Gen5+のダメージ補正で使用)。"""
@@ -95,9 +98,11 @@ class DamageResult:
     defender_hp: int
     total_min: int
     total_max: int
-    ko_chance: float  # 全段命中した前提でのKO確率
+    ko_chance: float  # KO確率(可変多段はヒット数分布で重み付け、それ以外は全段命中前提)
     type_eff: float
     notes: list[str] = field(default_factory=list)
+    ko_chance_all_hits: float | None = None  # 可変多段で最大ヒット前提の上限値
+    hit_count_distribution: dict[int, float] | None = None
 
 
 def _convolve(dist: dict[int, float], rolls: list[int]) -> dict[int, float]:
@@ -131,7 +136,7 @@ def calc_damage(
 
     per_hit = [
         HitResult(hit=i + 1, power=p, min=min(r), max=max(r))
-        for i, (p, r) in enumerate(zip(powers, per_hit_rolls))
+        for i, (p, r) in enumerate(zip(powers, per_hit_rolls, strict=True))
     ]
 
     cumulative: list[CumulativeResult] = []
@@ -155,7 +160,9 @@ def calc_damage(
     )
 
 
-def gen9_stab(move_type: str, original_types: list[str], *, protean: bool = False, tera_type: str | None = None) -> float:
+def gen9_stab(
+    move_type: str, original_types: list[str], *, protean: bool = False, tera_type: str | None = None
+) -> float:
     """第9世代のタイプ一致補正を返す(2.0 / 1.5 / 1.0)。
 
     - 変幻自在/リベロ: 技タイプ化するので常に 1.5
@@ -229,9 +236,22 @@ def damage_from_species(
         result.notes.append(f"いまひとつ x{eff:g}")
     if stab != 1.0:
         result.notes.append(f"タイプ一致 x{stab:g}")
-    if (min_hits and max_hits and min_hits != max_hits
-            and move_name.lower() not in ESCALATING_MULTIHIT):
+
+    is_variable = (
+        min_hits and max_hits and min_hits != max_hits
+        and move_name.lower() not in ESCALATING_MULTIHIT
+    )
+    if is_variable:
+        # ヒット数は実機ではダメージ前に確定。k発命中時のKO率を分布で重み付けする。
+        cum = result.cumulative
+        weighted = sum(
+            p * cum[min(k, len(cum)) - 1].ko_chance for k, p in VARIABLE_HIT_DIST.items()
+        )
+        result.ko_chance_all_hits = result.ko_chance
+        result.ko_chance = round(weighted, 6)
+        result.hit_count_distribution = VARIABLE_HIT_DIST
         result.notes.append(
-            f"最大{max_hits}発・全段命中前提のKO%(可変多段の実際の期待ヒット数は約3.5発)"
+            "可変多段(2-5発): ヒット数分布で重み付けしたKO%。"
+            "ko_chance_all_hits は最大ヒット前提の上限(スキルリンク/こだわりサイコロ時)"
         )
     return result
