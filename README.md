@@ -58,10 +58,98 @@ uv run python scripts/build_db.py
 claude mcp add --scope user pokemon -- uv --directory /path/to/pokemon-mcp run pokemon-mcp
 ```
 
+## 使い方
+
+### Claude Code から自然言語で
+
+登録後はそのまま日本語で聞けば、Claude が裏でツールを呼ぶ(Web検索しないのでコンテキストを食わない):
+
+- 「陽気マスカーニャの変幻自在トリプルアクセル、無振りガブは耐える?」
+- 「トリプルアクセルが光の粉持ちに3発当たる確率は?」
+- 「いのちのたま+晴れのリザードン かえんほうしゃ、フシギバナへのダメージは?」
+
+### ツール別の例
+
+**`calc_damage`** — 対面ダメージ(撃ごと/累計のレンジ・KO%):
+
+```jsonc
+// 入力: 陽気マスカーニャ(変幻自在) A252 トリプルアクセル vs 無振りガブ
+{ "attacker": "meowscarada", "defender": "garchomp", "move": "triple-axel",
+  "attacker_offense_ev": 252, "attacker_nature": "jolly", "protean": true }
+
+// 出力(抜粋)
+{ "per_hit": [ {"hit":1,"min":64,"max":84}, {"hit":2,"min":132,"max":156}, {"hit":3,"min":196,"max":232} ],
+  "cumulative": [ {"after_hit":2,"ko_chance":1.0} ],   // 2撃目で確定KO
+  "defender_hp": 183, "type_eff": 4.0, "stab": 1.5 }
+```
+
+道具・天候・テラスの例:
+
+```jsonc
+{ "attacker":"charizard", "defender":"venusaur", "move":"flamethrower",
+  "attacker_offense_ev":252, "attacker_nature":"modest",
+  "item":"life-orb", "weather":"sun" }            // 晴れ×いのちのたま ≒ x1.95
+```
+
+**`calc_accuracy`** — 命中率・多段の命中回数分布:
+
+```jsonc
+{ "move":"triple-axel", "bright_powder": true }
+// → per_check_hit_chance 0.81, all_hits_chance 0.531441,
+//    hit_count_distribution { "0":0.19, "1":0.1539, "2":0.124659, "3":0.531441 }
+```
+
+**`calc_stat`** — 実数値:
+
+```jsonc
+{ "base":110, "level":50, "ev":252, "nature":"jolly", "stat":"atk" }   // → 162
+```
+
+**`type_effectiveness`** — 相性倍率:
+
+```jsonc
+{ "attacking_type":"ice", "defending_types":["ground","dragon"] }      // → 4.0(こうかばつぐん)
+```
+
+**`get_pokemon` / `get_move`** — 素のデータ:
+
+```text
+get_pokemon("garchomp")   → base_stats / types / abilities
+get_move("triple-axel")   → power 20, accuracy 90, min_hits/max_hits 3, damage_class physical
+```
+
+### `calc_damage` のパラメータ早見
+
+| 引数 | 既定 | 説明 |
+|---|---|---|
+| `attacker` / `defender` / `move` | (必須) | 名前(英語slug または日本語名) |
+| `level` | 50 | レベル(1〜100) |
+| `attacker_offense_ev` / `attacker_iv` / `attacker_nature` | 0 / 31 / hardy | 攻撃側(物理=A、特殊=Cは技分類から自動) |
+| `defender_hp_ev` / `defender_defense_ev` / `defender_iv` / `defender_nature` | 0 / 0 / 31 / hardy | 防御側 |
+| `protean` | false | 変幻自在/リベロ(常にSTAB 1.5) |
+| `tera_type` | null | テラスタイプ(元タイプ一致なら2.0。攻撃側STABのみ) |
+| `item` | null | `life-orb` / `choice-band` / `choice-specs` / `expert-belt` / `muscle-band` / `wise-glasses` / タイプ強化アイテム(`charcoal`等) |
+| `weather` | null | `sun` / `rain` / `sand` / `snow`(日本語可) |
+| `crit` | false | 急所 |
+| `other` | 1.0 | その他の手動補正倍率 |
+
+> 命中(光の粉等)は別軸。`calc_damage` は命中前提のダメージ・KO%を返す。命中率は `calc_accuracy` を使う。
+> 可変多段(2-5発)の `ko_chance` はヒット数分布で重み付け、`ko_chance_all_hits` は最大ヒット前提(スキルリンク/こだわりサイコロ時)。
+
+### 日本語名で引くには
+
+技名は取得時に自動で日本語索引へ登録される。ポケモン名を含めて全件を日本語で引くには、一度だけ索引を構築する:
+
+```bash
+uv run python scripts/build_db.py --aliases   # 数分・一度きり
+# → 以後「ガブリアス」「かえんほうしゃ」等でも引ける
+```
+
 ## 仕様の正確さ
 
 `tests/test_damage.py` が「陽気マスカーニャ(変幻自在)トリプルアクセル vs 無振りガブリアス Lv50」の
 手計算(各撃 64-84 / 132-156 / 196-232、2撃目で確定気絶)を再現することでエンジンを検証している。
+補正順序は第5世代以降の公式式(天候 → 急所 → 乱数 → タイプ一致 → 相性)に準拠。
 
 ## ライセンス
 
